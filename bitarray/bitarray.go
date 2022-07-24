@@ -1,130 +1,134 @@
 package bitarray
 
 import (
+	"math/bits"
 	"strings"
 )
 
+type SignificantBit bool
+
+// 位序
 const (
-	BIG = iota
-	LITTLE
+	LSB SignificantBit = false
+	MSB SignificantBit = true
 )
 
 type BitArray struct {
-	data   []byte
-	bits   int
-	endian int
+	d     []byte
+	p     int
+	ismsb SignificantBit
 }
 
-func setbit(bit byte, offset int) byte {
-	return bit | 1<<offset
+func NewBitArray(buf []byte, sb SignificantBit) *BitArray {
+	return &BitArray{d: buf, p: 0, ismsb: sb}
 }
 
-func getbit(bit byte, offset int) bool {
-	if (bit & (1 << offset)) > 0 {
-		return true
+// Len bit数
+func (ba *BitArray) Len() int {
+	return ba.p
+}
+
+func (ba *BitArray) Append(bit bool) {
+	index := ba.p / 8       // 看应该对那个字节动手
+	if index == len(ba.d) { // 不够长 把里面的append一下
+		ba.d = append(ba.d, 0) // 填0
 	}
-	return false
-}
-
-func clearbit(bit byte, offset int) byte {
-	return ^(^bit | 1<<offset)
-}
-
-func NewBitArray(endian int) *BitArray {
-	return &BitArray{data: make([]byte, 0, 10), bits: 0, endian: endian}
-}
-
-// bit数
-func (self *BitArray) Len() int {
-	return self.bits
-}
-
-func (self *BitArray) Append(bit bool) {
-	index := self.Len() / 8       // 看应该对那个字节动手
-	if index > len(self.data)-1 { // 不够长 把里面的append一下
-		self.data = append(self.data, 0) // 填0
-	}
-	if bit { // fixme
-		self.data[index] = setbit(self.data[index], self.Len()%8)
+	offset := 0
+	if ba.ismsb {
+		offset = 7 - ba.p%8
 	} else {
-		self.data[index] = clearbit(self.data[index], self.Len()%8)
+		offset = ba.p % 8
 	}
-	self.bits++
+	if bit {
+		ba.d[index] |= 1 << offset
+	}
+	ba.p++
 }
 
-func (self *BitArray) Extend(bits []bool) {
+func (ba *BitArray) Extend(bits []bool) {
 	for _, v := range bits {
-		self.Append(v)
+		ba.Append(v)
 	}
 }
-func (self *BitArray) AppendByte(data byte) {
-	for i := 0; i < 8; i++ {
-		self.Append(getbit(data, i))
-	}
-}
-
-func (self *BitArray) ExtendBytes(data []byte) {
-	for _, v := range data {
-		self.AppendByte(v)
-	}
-}
-
-// todo index check
-// index是bit的索引
-func (self *BitArray) GetBit(index int) bool {
-	return getbit(self.data[index/8], index%8)
-}
-
-// index是bit的索引
-func (self *BitArray) SetBit(index int) {
-	mod := index / 8
-	self.data[mod] = setbit(self.data[mod], index%8)
-}
-
-// index是bit的索引
-func (self *BitArray) ClearBit(index int) {
-	mod := index / 8
-	self.data[mod] = clearbit(self.data[mod], index%8)
-}
-
-// 含1的个数
-func (self *BitArray) Count() int {
-	var ret int = 0
-	for i := 0; i < self.Len(); i++ {
-		if self.GetBit(i) {
-			ret++
+func (ba *BitArray) AppendByte(data byte) {
+	var i uint
+	if ba.ismsb {
+		for i = 128; i > 0; i >>= 1 {
+			ba.Append(uint(data)&i > 0)
+		}
+	} else {
+		for i = 1; i <= 128; i <<= 1 {
+			ba.Append(uint(data)&i > 0)
 		}
 	}
-	return ret
 }
 
-// return new array
-func (self *BitArray) Add(array *BitArray) *BitArray {
-	ret := NewBitArray(self.endian)
-	for i := 0; i < self.Len(); i++ {
-		ret.Append(self.GetBit(i))
+func (ba *BitArray) ExtendBytes(data []byte) {
+	for _, v := range data {
+		ba.AppendByte(v)
 	}
-	for i := 0; i < array.Len(); i++ {
-		ret.Append(array.GetBit(i))
-	}
-	return ret
 }
 
-func (self *BitArray) Bytes() []byte {
-	mod := self.Len() % 8
-	var l int
-	if mod > 0 {
-		l = self.Len()/8 + 1
+func (ba *BitArray) GetBit(index int) bool {
+	var offset uint
+	if ba.ismsb {
+		offset = 7 - uint(index%8)
 	} else {
-		l = self.Len() / 8
+		offset = uint(index % 8)
 	}
-	return self.data[:l]
+	return uint(ba.d[index/8])&(1<<offset) > 0
 }
 
-func (self *BitArray) String() string {
+func (ba *BitArray) SetBit(index int) {
+	mod := index / 8
+	offset := 0
+	if ba.ismsb {
+		offset = 7 - index%8
+	} else {
+		offset = index % 8
+	}
+	ba.d[mod] |= 1 << offset
+}
+
+func (ba *BitArray) ClearBit(index int) {
+	mod := index / 8
+	offset := 0
+	if ba.ismsb {
+		offset = 7 - index%8
+	} else {
+		offset = index % 8
+	}
+	ba.d[mod] &^= 1 << offset
+}
+
+func (ba *BitArray) Count() (ret int) {
+	for _, b := range ba.d {
+		ret += bits.OnesCount8(b)
+	}
+	return
+}
+
+func (ba *BitArray) Add(array *BitArray) (nba *BitArray) {
+	nba = &BitArray{d: ba.d, p: ba.p, ismsb: ba.ismsb}
+	for i := 0; i < array.Len(); i++ {
+		nba.Append(array.GetBit(i))
+	}
+	return
+}
+
+func (ba *BitArray) Bytes() []byte {
+	mod := ba.p % 8
+	l := ba.p / 8
+	if mod > 0 {
+		l++
+	}
+	return ba.d[:l]
+}
+
+func (ba *BitArray) String() string {
 	var b strings.Builder
-	for i := 0; i < self.Len(); i++ {
-		if self.GetBit(i) {
+	for i := 0; i < ba.p; i++ {
+		if ba.GetBit(i) {
 			b.WriteString("1")
 		} else {
 			b.WriteString("0")
