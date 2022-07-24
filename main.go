@@ -6,8 +6,8 @@ import (
 )
 
 func main() {
-	array := bitarray.NewBitArray(bitarray.BIG)
-	array.ExtendBytes([]byte{0, 0, 255, 255})
+	array := bitarray.NewBitArray(bitarray.LITTLE)
+	array.ExtendBytes([]byte{0, 1, 255, 255})
 	fmt.Println(array.String())
 	array.Append(true)
 	array.Append(false)
@@ -16,4 +16,5 @@ func main() {
 		fmt.Println(array.GetBit(i))
 	}
 	fmt.Println(array.Count())
+	fmt.Println(array.Bytes())
 }
