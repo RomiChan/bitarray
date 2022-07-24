@@ -27,7 +27,8 @@ func getbit(bit byte, offset int) bool {
 }
 
 func clearbit(bit byte, offset int) byte {
-	return ^(^bit | (1 << offset))
+	//return ^(^bit | (1 << offset))
+	return bit &^ byte(1<<offset)
 }
 
 func NewBitArray(endian int) *BitArray {
