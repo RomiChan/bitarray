@@ -116,6 +116,14 @@ func (ba *BitArray) Add(array *BitArray) (nba *BitArray) {
 	return
 }
 
+func (ba *BitArray) GetSlice(start, end int) *BitArray {
+	nb := &BitArray{ismsb: ba.ismsb}
+	for i := start; i < end; i++ {
+		nb.Append(ba.GetBit(i))
+	}
+	return nb
+}
+
 func (ba *BitArray) Bytes() []byte {
 	mod := ba.p % 8
 	l := ba.p / 8

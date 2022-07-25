@@ -8,7 +8,7 @@ import (
 
 func main() {
 	array := bitarray.NewBitArray(nil, bitarray.LSB)
-	array.ExtendBytes([]byte{0, 0, 123, 234})
+	array.ExtendBytes([]byte{0, 1, 255, 255})
 	fmt.Println(array.String())
 	array.Append(true)
 	array.Append(false)
